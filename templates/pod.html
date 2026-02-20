@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pod Detail — Trading Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--border2:#21262d;--green:#3fb950;--red:#f85149;--yellow:#d29922;--blue:#58a6ff;--purple:#a371f7;--text:#e6edf3;--muted:#8b949e;--dimmed:#484f58}
+    body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:14px;line-height:1.5;min-height:100vh}
+    a{color:var(--blue);text-decoration:none}
+
+    .header{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;gap:12px}
+    .back-btn{color:var(--blue);font-size:13px;display:flex;align-items:center;gap:4px}
+    .main{padding:20px;max-width:1200px;margin:0 auto}
+
+    .hero{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px}
+    .hero-left{display:flex;align-items:center;gap:16px}
+    .pod-name-big{font-size:32px;font-weight:800;letter-spacing:-.5px}
+    .badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600}
+    .badge-live{background:rgba(248,81,73,.15);color:var(--red)}
+    .badge-paper{background:rgba(88,166,255,.15);color:var(--blue)}
+    .badge-running{background:rgba(63,185,80,.15);color:var(--green)}
+    .badge-stopped{background:rgba(248,81,73,.15);color:var(--red)}
+
+    .source-toggle{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;font-size:12px}
+    .source-toggle button{background:none;border:none;padding:6px 14px;color:var(--muted);cursor:pointer;font-family:inherit;font-weight:500;transition:.15s}
+    .source-toggle button.active-live{background:rgba(248,81,73,.15);color:var(--red)}
+    .source-toggle button.active-paper{background:rgba(88,166,255,.15);color:var(--blue)}
+
+    .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:24px}
+    .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px}
+    .stat-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+    .stat-value{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+    .green{color:var(--green)}.red{color:var(--red)}.yellow{color:var(--yellow)}.blue{color:var(--blue)}
+
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:20px}
+    .panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:20px}
+    .panel-header{padding:12px 16px;border-bottom:1px solid var(--border2);font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;display:flex;align-items:center;justify-content:space-between}
+    .panel-body{padding:16px}
+    .panel-empty{padding:30px;text-align:center;color:var(--dimmed)}
+
+    .chart-container{position:relative;height:240px}
+
+    .mini-table{width:100%;border-collapse:collapse;font-size:12px}
+    .mini-table th{text-align:left;font-size:10px;font-weight:600;color:var(--dimmed);text-transform:uppercase;letter-spacing:.4px;padding:6px 10px;border-bottom:1px solid var(--border2)}
+    .mini-table td{padding:7px 10px;border-bottom:1px solid var(--border2);font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:11px}
+    .mini-table tr:hover td{background:rgba(88,166,255,.04)}
+
+    .log-viewer{background:#0a0d12;border:1px solid var(--border2);border-radius:6px;padding:12px;overflow:auto;max-height:360px;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.7}
+    pre.config-pre{background:#0a0d12;border:1px solid var(--border2);border-radius:6px;padding:14px;overflow:auto;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.7;color:var(--muted);max-height:320px}
+
+    .refresh-btn{background:none;border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;font-family:inherit}
+    .refresh-btn:hover{color:var(--text);border-color:var(--text)}
+
+    .loading{display:flex;align-items:center;justify-content:center;height:120px;color:var(--muted)}
+    .spinner{width:28px;height:28px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    @media(max-width:768px){.two-col{grid-template-columns:1fr}.stats-grid{grid-template-columns:repeat(3,1fr)}.main{padding:12px}}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <a class="back-btn" href="/">← Dashboard</a>
+    <div style="width:1px;height:20px;background:var(--border)"></div>
+    <div style="font-weight:700;font-size:18px">📊 Trading Dashboard</div>
+    <div style="color:var(--dimmed)">/</div>
+    <div id="header-title" style="font-weight:600">…</div>
+  </div>
+
+  <div class="main">
+    <div class="hero">
+      <div class="hero-left">
+        <div class="pod-name-big" id="pod-name">—</div>
+        <span id="mode-badge"></span>
+        <span id="status-badge"></span>
+      </div>
+      <div class="source-toggle" id="source-toggle">
+        <button onclick="setSource('live')" id="src-live">🔴 Live</button>
+        <button onclick="setSource('paper')" id="src-paper">📝 Paper</button>
+      </div>
+    </div>
+
+    <div id="price-line" style="color:var(--muted);font-size:13px;margin:-12px 0 20px;font-family:'JetBrains Mono',monospace">—</div>
+
+    <div class="stats-grid" id="stats-grid"></div>
+
+    <div class="panel">
+      <div class="panel-header">P&L Over Time</div>
+      <div class="panel-body"><div class="chart-container"><canvas id="chart-pnl"></canvas></div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">Trade History <span id="trades-source-label" style="font-size:10px"></span></div>
+      <div id="trades-wrap"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+    <div class="two-col">
+      <div class="panel">
+        <div class="panel-header">📝 Logs <button class="refresh-btn" onclick="loadLogs()">↺</button></div>
+        <div class="panel-body"><div class="log-viewer" id="log-viewer">Loading…</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">⚙️ Config</div>
+        <div class="panel-body"><pre class="config-pre" id="config-pre">Loading…</pre></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const POD='{{ pod_name }}';
+let podData=null;
+let source=null; // will be set from pod mode
+let pnlChart=null;
+
+function fmt(n,d=2){return n!=null?Number(n).toFixed(d):'—'}
+function fmtPnl(n){if(n==null)return'—';const a=Math.abs(n).toFixed(2);return n>=0?'+$'+a:'-$'+a}
+function fmtPct(n){return n!=null?Number(n).toFixed(1)+'%':'—'}
+function pnlClass(n){return n==null?'':n>=0?'green':'red'}
+function wrClass(n){return n==null?'':n>=55?'green':n>=50?'yellow':'red'}
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+function setSource(s){
+  source=s;
+  document.getElementById('src-live').className=s==='live'?'active-live':'';
+  document.getElementById('src-paper').className=s==='paper'?'active-paper':'';
+  loadPod();
+}
+
+async function loadPod(){
+  try{
+    const r=await fetch(`/api/pod/${POD}?source=${source||''}`);
+    podData=await r.json();
+    if(!source)source=podData.mode;
+    render();
+  }catch(e){console.error(e)}
+}
+
+function render(){
+  const d=podData;if(!d)return;
+  document.getElementById('header-title').textContent=d.asset;
+  document.getElementById('pod-name').textContent=d.asset;
+  document.getElementById('mode-badge').innerHTML=d.mode==='live'?'<span class="badge badge-live">🔴 LIVE</span>':'<span class="badge badge-paper">📝 PAPER</span>';
+  document.getElementById('status-badge').innerHTML=d.running?'<span class="badge badge-running">● Running</span>':'<span class="badge badge-stopped">● Stopped</span>';
+  document.getElementById('src-live').className=source==='live'?'active-live':'';
+  document.getElementById('src-paper').className=source==='paper'?'active-paper':'';
+  document.getElementById('trades-source-label').textContent=source==='live'?'🔴 LIVE':'📝 PAPER';
+
+  const price=d.log_status?.last_price;
+  const sigma=d.log_status?.last_sigma;
+  document.getElementById('price-line').textContent=[price?'$'+Number(price).toLocaleString():null,sigma?'σ='+sigma.toFixed(5):null,d.log_status?.last_scan_ago?'Last: '+d.log_status.last_scan_ago:null].filter(Boolean).join('  ·  ')||'—';
+
+  // Stats
+  const s=source==='live'?d.live_stats:d.paper_stats;
+  document.getElementById('stats-grid').innerHTML=`
+    <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-value ${wrClass(s.win_rate)}">${fmtPct(s.win_rate)}</div></div>
+    <div class="stat-card"><div class="stat-label">P&L ${source==='paper'?'(sim)':''}</div><div class="stat-value ${pnlClass(s.total_pnl)}">${fmtPnl(s.total_pnl)}</div></div>
+    <div class="stat-card"><div class="stat-label">Trades</div><div class="stat-value">${s.total}</div></div>
+    <div class="stat-card"><div class="stat-label">Settled</div><div class="stat-value">${s.settled}</div></div>
+    <div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value yellow">${s.pending}</div></div>
+    <div class="stat-card"><div class="stat-label">Today P&L</div><div class="stat-value ${pnlClass(s.today_pnl)}">${fmtPnl(s.today_pnl)}</div></div>
+    <div class="stat-card"><div class="stat-label">Avg Edge</div><div class="stat-value blue">${fmtPct(s.avg_edge_pct)}</div></div>
+    <div class="stat-card"><div class="stat-label">Today Trades</div><div class="stat-value">${s.today_total}</div></div>
+  `;
+
+  // P&L chart
+  renderPnlChart();
+
+  // Trades table
+  const trades=d.recent_trades||[];
+  if(!trades.length){
+    document.getElementById('trades-wrap').innerHTML='<div class="panel-empty">No trades yet</div>';
+  }else{
+    const rows=trades.map(t=>{
+      const oc=t.outcome||'pending';
+      const pCls=t.pnl_dollars==null?'':t.pnl_dollars>=0?'green':'red';
+      return `<tr>
+        <td>${t.entered_at_fmt||'—'}</td>
+        <td style="color:var(--muted);font-size:10px;max-width:160px;overflow:hidden;text-overflow:ellipsis">${t.ticker||'—'}</td>
+        <td>${t.side==='buy_yes'?'<span style="color:var(--green)">YES</span>':'<span style="color:var(--red)">NO</span>'}</td>
+        <td>${fmt(t.entry_price_cents,0)}¢</td>
+        <td>${t.contracts}</td>
+        <td>$${fmt(t.cost_basis,2)}</td>
+        <td>${t.edge_pct}%</td>
+        <td style="color:${oc==='win'?'var(--green)':oc==='loss'?'var(--red)':'var(--yellow)'};font-weight:600">${oc.toUpperCase()}</td>
+        <td class="${pCls}">${t.pnl_dollars!=null?fmtPnl(t.pnl_dollars):'—'}</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('trades-wrap').innerHTML=`<div style="overflow:auto"><table class="mini-table"><thead><tr>
+      <th>Time</th><th>Ticker</th><th>Side</th><th>Entry</th><th>Qty</th><th>Cost</th><th>Edge</th><th>Outcome</th><th>P&L</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+
+  // Config
+  const cfg=d.config||{};
+  document.getElementById('config-pre').textContent=formatConfig(cfg);
+}
+
+function renderPnlChart(){
+  if(pnlChart){pnlChart.destroy();pnlChart=null}
+  const pts=podData.pnl_chart[source]||[];
+  if(!pts.length){document.getElementById('chart-pnl').parentElement.innerHTML='<div class="panel-empty">No settled trades</div>';return}
+  const color=source==='live'?'var(--red)':'var(--blue)';
+  const borderColor=source==='live'?'#f85149':'#58a6ff';
+  const bgColor=source==='live'?'rgba(248,81,73,.08)':'rgba(88,166,255,.08)';
+  pnlChart=new Chart(document.getElementById('chart-pnl'),{
+    type:'line',
+    data:{datasets:[{label:(source==='live'?'Live':'Paper')+' P&L',data:pts.map(p=>({x:p.label,y:p.y})),borderColor,backgroundColor:bgColor,borderWidth:2,fill:true,pointRadius:0,tension:.3}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#8b949e',font:{size:11}}}},
+      scales:{x:{type:'category',ticks:{color:'#484f58',font:{size:10},maxTicksLimit:10},grid:{color:'#21262d'}},
+              y:{ticks:{color:'#484f58',font:{size:10},callback:v=>'$'+v.toFixed(2)},grid:{color:'#21262d'}}}}
+  });
+}
+
+function formatConfig(cfg){
+  const lines=[];
+  function walk(obj,indent=''){
+    for(const[k,v]of Object.entries(obj)){
+      if(k==='kalshi'){lines.push(indent+k+': [credentials hidden]');continue}
+      if(v&&typeof v==='object'&&!Array.isArray(v)){lines.push(indent+k+':');walk(v,indent+'  ')}
+      else if(Array.isArray(v)){lines.push(indent+k+': ['+v.join(', ')+']')}
+      else{lines.push(indent+k+': '+v)}
+    }
+  }
+  walk(cfg);return lines.join('\n');
+}
+
+async function loadLogs(){
+  const el=document.getElementById('log-viewer');
+  try{
+    const r=await fetch(`/api/pod/${POD}/logs?n=50`);
+    const d=await r.json();
+    const lines=d.lines||[];
+    if(!lines.length){el.innerHTML='<span style="color:var(--dimmed)">No logs</span>';return}
+    el.innerHTML=lines.map(line=>{
+      const m=line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d+) \[(\w+)\] (.+)$/);
+      if(m){
+        const[,ts,level,msg]=m;
+        const c=level==='ERROR'?'var(--red)':level==='WARNING'?'var(--yellow)':'var(--muted)';
+        return `<span style="display:block"><span style="color:var(--dimmed)">${ts}</span> <span style="color:${c}">[${level}]</span> ${escHtml(msg)}</span>`;
+      }
+      return `<span style="display:block;color:var(--muted)">${escHtml(line)}</span>`;
+    }).join('');
+    el.scrollTop=el.scrollHeight;
+  }catch(e){el.innerHTML='<span style="color:var(--red)">Error</span>'}
+}
+
+// Init
+loadPod();
+loadLogs();
+setInterval(()=>{loadPod();loadLogs()},30000);
+</script>
+</body>
+</html>
