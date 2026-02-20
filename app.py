@@ -443,6 +443,84 @@ def api_charts_pnl():
     return jsonify({"by_asset": by_asset, "aggregate": agg_points, "source": source})
 
 
+# ── System Stats ──
+
+@app.route("/system")
+def system_page():
+    return render_template("system_stats.html")
+
+@app.route("/api/system")
+def api_system():
+    import psutil, time
+
+    # Memory
+    vm = psutil.virtual_memory()
+    pressure_pct = round((vm.active + vm.wired) / vm.total * 100, 1) if hasattr(vm, "wired") else round(vm.percent, 1)
+    wired_mb = round(getattr(vm, "wired", 0) / 1024**2)
+    active_mb = round(vm.active / 1024**2)
+    compressed_mb = round(getattr(vm, "compressed", 0) / 1024**2)
+    cached_mb = round(getattr(vm, "cached", 0) / 1024**2)
+    free_mb = round(vm.available / 1024**2)
+    total_mb = round(vm.total / 1024**2)
+
+    # CPU
+    cpu_pct = psutil.cpu_percent(interval=0.5)
+    per_core = psutil.cpu_percent(interval=None, percpu=True)
+
+    # Network (delta over 1s)
+    n1 = psutil.net_io_counters()
+    time.sleep(1)
+    n2 = psutil.net_io_counters()
+    recv_kbs = round((n2.bytes_recv - n1.bytes_recv) / 1024, 1)
+    sent_kbs = round((n2.bytes_sent - n1.bytes_sent) / 1024, 1)
+
+    # Swap
+    sw = psutil.swap_memory()
+    swap_used_mb = round(sw.used / 1024**2)
+    swap_total_mb = round(sw.total / 1024**2)
+
+    # Top processes by memory
+    procs = []
+    for p in sorted(psutil.process_iter(["pid", "name", "memory_info"]), 
+                    key=lambda x: x.info["memory_info"].rss if x.info["memory_info"] else 0,
+                    reverse=True)[:5]:
+        try:
+            procs.append({
+                "name": p.info["name"],
+                "pid": p.info["pid"],
+                "memory_mb": round(p.info["memory_info"].rss / 1024**2, 1)
+            })
+        except Exception:
+            pass
+
+    # Running pods
+    result = subprocess.run(["ps", "aux"], capture_output=True, text=True)
+    pod_lines = [l for l in result.stdout.split("\n") if "daemon.py" in l and "grep" not in l]
+    pod_names = []
+    for l in pod_lines:
+        import re as _re
+        m = _re.search(r"pods/([^/]+)/daemon\.py", l)
+        if m:
+            pod_names.append(m.group(1))
+
+    return jsonify({
+        "memory": {
+            "pressure_pct": pressure_pct,
+            "wired_mb": wired_mb,
+            "active_mb": active_mb,
+            "compressed_mb": compressed_mb,
+            "cached_mb": cached_mb,
+            "free_mb": free_mb,
+            "total_mb": total_mb,
+        },
+        "cpu": {"usage_pct": cpu_pct, "per_core": per_core},
+        "network": {"recv_kbs": recv_kbs, "sent_kbs": sent_kbs},
+        "swap": {"used_mb": swap_used_mb, "total_mb": swap_total_mb},
+        "processes": procs,
+        "pods": {"count": len(pod_names), "names": sorted(pod_names)},
+    })
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 7799))
     print(f"🚀 Trading Dashboard on http://localhost:{port}")

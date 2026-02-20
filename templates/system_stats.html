@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>System — clawcore.lol</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #111; color: #e0e0e0; font-family: 'SF Mono', 'Menlo', monospace; font-size: 13px; padding: 20px; }
+  a { color: #4af; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .nav { display: flex; gap: 20px; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid #222; }
+  .nav a { color: #888; font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; }
+  .nav a.active, .nav a:hover { color: #4af; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 760px; }
+  .card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; padding: 16px; }
+  .card-title { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #4af; margin-bottom: 12px; }
+
+  .bar-track { background: #2a2a2a; border-radius: 4px; height: 10px; overflow: hidden; margin-bottom: 10px; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+  .bar-blue { background: #4af; }
+  .bar-red { background: #f44; }
+  .bar-seg { display: flex; height: 100%; border-radius: 4px; overflow: hidden; }
+  .seg-wired { background: #4af; }
+  .seg-active { background: #f44; }
+  .seg-compressed { background: #a4f; }
+  .seg-free { background: #2a2a2a; }
+
+  .stat-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .stat-label { color: #888; }
+  .stat-value { color: #e0e0e0; }
+
+  .pct-large { font-size: 28px; font-weight: 600; color: #e0e0e0; margin-bottom: 8px; }
+
+  .proc-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  .proc-table td { padding: 4px 0; border-bottom: 1px solid #222; }
+  .proc-table td:last-child { text-align: right; color: #888; }
+  .proc-table tr:last-child td { border-bottom: none; }
+
+  .pod-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .pod-tag { background: #1f2f1f; color: #4f4; border: 1px solid #2a4a2a; border-radius: 4px; padding: 2px 8px; font-size: 11px; }
+  .pod-count { font-size: 28px; font-weight: 600; color: #4f4; }
+
+  .net-val { font-size: 18px; color: #e0e0e0; margin: 4px 0; }
+  .net-label { color: #888; font-size: 11px; }
+
+  .cores { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 8px; }
+  .core-bar { width: 18px; background: #2a2a2a; border-radius: 2px; position: relative; height: 40px; overflow: hidden; }
+  .core-fill { position: absolute; bottom: 0; width: 100%; background: #4af; border-radius: 2px; transition: height 0.5s ease; }
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <a href="/">Pod Shop</a>
+  <a href="/system" class="active">System</a>
+</div>
+
+<div class="grid" id="grid">
+
+  <div class="card" id="card-pressure">
+    <div class="card-title">Pressure</div>
+    <div class="pct-large" id="pressure-pct">—</div>
+    <div class="bar-track"><div class="bar-fill bar-blue" id="pressure-bar" style="width:0%"></div></div>
+    <div class="stat-row"><span class="stat-label">App Memory</span><span class="stat-value" id="mem-active">—</span></div>
+    <div class="stat-row"><span class="stat-label">Wired</span><span class="stat-value" id="mem-wired">—</span></div>
+    <div class="stat-row"><span class="stat-label">Compressed</span><span class="stat-value" id="mem-compressed">—</span></div>
+    <div class="stat-row"><span class="stat-label">Free</span><span class="stat-value" id="mem-free">—</span></div>
+    <div class="stat-row"><span class="stat-label">Total</span><span class="stat-value" id="mem-total">—</span></div>
+  </div>
+
+  <div class="card" id="card-memory">
+    <div class="card-title">Memory</div>
+    <div class="bar-track">
+      <div class="bar-seg" id="mem-seg">
+        <div class="seg-wired" id="seg-wired" style="width:0%"></div>
+        <div class="seg-active" id="seg-active" style="width:0%"></div>
+        <div class="seg-compressed" id="seg-compressed" style="width:0%"></div>
+      </div>
+    </div>
+    <div class="stat-row" style="margin-top:8px">
+      <span style="color:#4af">■ Wired</span>
+      <span style="color:#f44">■ Active</span>
+      <span style="color:#a4f">■ Compressed</span>
+    </div>
+    <div style="margin-top:12px">
+      <div class="card-title">CPU</div>
+      <div class="pct-large" id="cpu-pct">—</div>
+      <div class="cores" id="cores"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Network</div>
+    <div class="stat-row">
+      <div>
+        <div class="net-label">↓ In</div>
+        <div class="net-val" id="net-recv">—</div>
+      </div>
+      <div style="text-align:right">
+        <div class="net-label">↑ Out</div>
+        <div class="net-val" id="net-sent">—</div>
+      </div>
+    </div>
+    <div style="margin-top:16px">
+      <div class="card-title">Swap</div>
+      <div class="stat-row"><span class="stat-label">Used</span><span class="stat-value" id="swap-used">—</span></div>
+      <div class="bar-track" style="margin-top:6px"><div class="bar-fill bar-red" id="swap-bar" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Processes</div>
+    <table class="proc-table" id="proc-table">
+      <tr><td colspan="2" style="color:#555">Loading…</td></tr>
+    </table>
+  </div>
+
+  <div class="card" style="grid-column: 1 / -1">
+    <div class="card-title">Trading Pods</div>
+    <div class="pod-count" id="pod-count">—</div>
+    <div style="color:#888; font-size:11px; margin-bottom:4px">daemons running</div>
+    <div class="pod-list" id="pod-list"></div>
+  </div>
+
+</div>
+
+<script>
+function fmt(mb) {
+  if (mb >= 1024) return (mb/1024).toFixed(1) + ' GB';
+  return mb + ' MB';
+}
+
+async function refresh() {
+  try {
+    const d = await fetch('/api/system').then(r => r.json());
+    const m = d.memory;
+    const total = m.total_mb;
+
+    document.getElementById('pressure-pct').textContent = m.pressure_pct + '%';
+    document.getElementById('pressure-bar').style.width = Math.min(m.pressure_pct, 100) + '%';
+    document.getElementById('mem-active').textContent = fmt(m.active_mb);
+    document.getElementById('mem-wired').textContent = fmt(m.wired_mb);
+    document.getElementById('mem-compressed').textContent = fmt(m.compressed_mb);
+    document.getElementById('mem-free').textContent = fmt(m.free_mb);
+    document.getElementById('mem-total').textContent = fmt(total);
+
+    document.getElementById('seg-wired').style.width = (m.wired_mb/total*100).toFixed(1) + '%';
+    document.getElementById('seg-active').style.width = (m.active_mb/total*100).toFixed(1) + '%';
+    document.getElementById('seg-compressed').style.width = (m.compressed_mb/total*100).toFixed(1) + '%';
+
+    document.getElementById('cpu-pct').textContent = d.cpu.usage_pct.toFixed(1) + '%';
+    const cores = document.getElementById('cores');
+    cores.innerHTML = d.cpu.per_core.map(c =>
+      `<div class="core-bar"><div class="core-fill" style="height:${c}%"></div></div>`
+    ).join('');
+
+    document.getElementById('net-recv').textContent = d.network.recv_kbs + ' KB/s';
+    document.getElementById('net-sent').textContent = d.network.sent_kbs + ' KB/s';
+
+    const sw = d.swap;
+    document.getElementById('swap-used').textContent = sw.total_mb > 0 ? fmt(sw.used_mb) + ' / ' + fmt(sw.total_mb) : '0 KB';
+    document.getElementById('swap-bar').style.width = sw.total_mb > 0 ? (sw.used_mb/sw.total_mb*100).toFixed(1)+'%' : '0%';
+
+    const tbl = document.getElementById('proc-table');
+    tbl.innerHTML = d.processes.map(p =>
+      `<tr><td>${p.name}</td><td>${fmt(p.memory_mb)}</td></tr>`
+    ).join('');
+
+    document.getElementById('pod-count').textContent = d.pods.count;
+    document.getElementById('pod-list').innerHTML = d.pods.names.map(n =>
+      `<span class="pod-tag">● ${n}</span>`
+    ).join('');
+
+  } catch(e) { console.error(e); }
+}
+
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>
